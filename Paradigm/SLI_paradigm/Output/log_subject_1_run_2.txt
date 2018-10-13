@@ -1,0 +1,1 @@
+Trial	Cond	AudioStart	AudioEnd	ImageEnd	FixEnd	AudioFN	ImageFN	SjtChoice	RT

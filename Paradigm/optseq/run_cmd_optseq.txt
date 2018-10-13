@@ -1,0 +1,1 @@
+optseq2 --ntp 150 --tr 2.5 --psdwin 0 20 2.5 --ev SVOZ 7.5 8 --ev SZVO 7.5 8 --ev ZM 7.5 16 --ev FIL 7.5 8 --evc 1 1 -1 0 --nkeep 30 --o SLI --nsearch 10000
