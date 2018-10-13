@@ -4,9 +4,5 @@ results/
 training/
 SLI fMRI training/
 derivatives/
-.cache/
-.config/
-.java/
-.matlab/
-.oracle_jre_usage/
-
+.*
+!/.gitignore
