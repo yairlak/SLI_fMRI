@@ -1,29 +1,70 @@
+import pandas as pd
+
 
 ##### Analysis of a single session, single subject fMRI dataset
+def get_events(events_file, shift_onset_all = 0, shift_onset_non_silence = 0):
+    events = pd.read_table(events_file)
+    fn = lambda row: row.FixEnd - row.AudioStart  # define a function for the new column
+    col = events.apply(fn, axis=1)  # get column data with an index
+    events = events.assign(duration=col.values)
+    events = events.rename(index=str, columns={"AudioStart": "onset", "Cond": "trial_type"})
+    events = events.filter(['onset', 'duration', 'trial_type'], axis=1)
+    events.onset = events.onset.astype(float)
+    events.duration = events.duration.astype(float)
+    events.trial_type = events.trial_type.astype(str)
+    events.loc[events.trial_type == 'nan', 'trial_type'] = 'SILENCE'
+    # print(events)
+
+    # Tweak the events file
+    for index, row in events.iterrows():
+        events['onset'].values[int(index)] = row['onset'] + shift_onset_all
+        if row['trial_type'] != 'SILENCE':
+            events['duration'].values[int(index)] = 2.5
+            events['onset'].values[int(index)] += shift_onset_non_silence
+        # events['onset'].values[int(index)] = row['onset'] + 0.8
+    # print(events)
+    return events
 
 
 ###############################################################################
-import os
+import os, glob
 import matplotlib.pyplot as plt
 from os.path import join
 from nilearn.image import concat_imgs, mean_img
 anat_img = '/home/yl254115/Projects/SLI_fMRI/sourcedata/sub-S01/ses-V1/anat/sub-S01_ZA_260718_MPRAGE_iso1mm_T1w.nii.gz'
-# fmri_img = '/home/yl254115/Projects/SLI_fMRI/derivatives/spmpreproc_ses-V2/sub-S01/wrrsub-S01_ZA_260718_cmrr_mbep2d_157vola_bold.nii.gz'
-fmri_img = '/home/yl254115/Projects/SLI_fMRI/derivatives/spmpreproc_ses-V1/sub-S01/wrrsub-S01_ZA_260718_cmrr_mbep2d_157vol_bold.nii.gz'
+fmri_img1 = '/home/yl254115/Projects/SLI_fMRI/derivatives/spmpreproc_ses-V1/sub-S01/wrrsub-S01_ZA_260718_cmrr_mbep2d_157vol_bold.nii.gz'
+fmri_img2 = '/home/yl254115/Projects/SLI_fMRI/derivatives/spmpreproc_ses-V2/sub-S01/wrrsub-S01_ZA_260718_cmrr_mbep2d_157vola_bold.nii.gz'
+fmri_imgs = glob.glob(os.path.join('/home/yl254115/Projects/SLI_fMRI/derivatives/spmpreproc_ses-*/sub-S01/wrrsub-S01_ZA_260718_cmrr_mbep2d_157vol*_bold.nii.gz'))
+fmri_img = concat_imgs(fmri_imgs)
+fmri_img = fmri_img1
 mean_img = mean_img(fmri_img)
-events_file = '/home/yl254115/Projects/SLI_fMRI/sourcedata/sub-S01/logs/log_subject_5_run_2.txt'
+
 outdir = '/home/yl254115/Projects/SLI_fMRI/results'
 subject = 'sub-S01'
-block = 1
+# block = 1
+run_order = [2, 1, 3] # match 157vol to first-run log, 157vola to second and 157volb to third log.
+run_order = [2]
 broca = (-38, 16, 50)
 A1 = (-40, -28, 6)
 V1 = (-28, -96, -6)
-roi_name = 'A1'
+STG = (-58, -16, -4)
+pSTS = (-57, -62, 9)
+roi_name = 'STG'
 roi = eval(roi_name)
 cond1 = 'ZM'
-cond2 = 'SILENCE'
-contrast_name = subject + '_block_%i_' % block + cond1 +'_minus_' + cond2 + '_roi_' + roi_name
+cond2 = 'SVO'
+shift_onset_non_silence_glob = 2.5
+contrast_name = subject + '_runs_%s_' % '_'.join(map(str, run_order)) + cond1 +'_minus_' + cond2 + '_roi_' + roi_name + '_shift_' + str(shift_onset_non_silence_glob)
+
 from numpy import array
+contrast_vecs = {'FIL':     array([1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'SVOZ':    array([0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'SZVO':    array([0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'ZM':      array([0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'SILENCE': array([0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'SVO':     array([0., 0., 0.5, 0.5, 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'NULL':    array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
+                 'ALL':     array([1., 0., 1., 1., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])}
 contrast_vecs = {'FIL':     array([1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
                  'SVOZ':    array([0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
                  'SZVO':    array([0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]),
@@ -37,9 +78,10 @@ curr_contrast = conditions[cond1] - conditions[cond2]
 
 smoothing = 8
 
+
 ###############################################################################
 # We can display the first functional image and the subject's anatomy:
-from nilearn.plotting import plot_stat_map, plot_anat, plot_img, show
+from nilearn.plotting import plot_stat_map, plot_anat, plot_img, show, plot_glass_brain
 # plot_img(fmri_img)
 plot_anat(anat_img)
 plt.savefig(join(outdir, subject + '_anatomy.png'))
@@ -48,27 +90,14 @@ plt.close()
 ###############################################################################
 # Specifying the experimental paradigm (events file)
 # ----------------------------------------------------
-import pandas as pd
-# with open(events_file, 'r') as f:
-#     events = f.readlines()
-# events = [l.split('\t') for l in events]
-events = pd.read_table(events_file)
-fn = lambda row: row.FixEnd - row.AudioStart# define a function for the new column
-col = events.apply(fn, axis=1) # get column data with an index
-events = events.assign(duration=col.values)
-events = events.rename(index=str, columns = {"AudioStart":"onset", "Cond":"trial_type"})
-events = events.filter(['onset','duration','trial_type'], axis=1)
-events.onset = events.onset.astype(float)
-events.duration = events.duration.astype(float)
-events.trial_type = events.trial_type.astype(str)
-events.loc[events.trial_type == 'nan', 'trial_type'] = 'SILENCE'
-print(events)
-
-# Tweak the events file
-events['duration'].values[:] = 2.5
-# for index, row in events.iterrows():
-#     if row['trial_type'] != 'nan':
-#         events['onset'].values[int(index)] = row['onset'] + 2.5
+events_all_run = []
+onset_shift = 0
+for run in run_order:
+    events_all_run.append(get_events('/home/yl254115/Projects/SLI_fMRI/sourcedata/sub-S01/logs/log_subject_5_run_%i.txt' % run,
+                             shift_onset_all = onset_shift,
+                          shift_onset_non_silence=shift_onset_non_silence_glob))
+    onset_shift += 157*2.5
+events = pd.concat(events_all_run)
 print(events)
 
 ###############################################################################
@@ -101,9 +130,9 @@ fmri_glm = fmri_glm.fit(fmri_img, events, confounds=confounds)
 design_matrix = fmri_glm.design_matrices_[0]
 # Save the design matrix image to disk
 if not os.path.exists(outdir): os.mkdir(outdir)
-plot_design_matrix(design_matrix, output_file=join(outdir, subject + '_block_%i_' % block + '_design_matrix.png'))
+plot_design_matrix(design_matrix, output_file=join(outdir, subject + '_block_%s_' % '_'.join(map(str, run_order)) + '_design_matrix.png'))
 plt.close()
-print('Design matrix plot saved to: ' + join(outdir, subject + '_block_%i_' % block + '_design_matrix.png'))
+print('Design matrix plot saved to: ' + join(outdir, subject + '_block_%s_' % '_'.join(map(str, run_order)) + '_design_matrix.png'))
 # The first column contains the expected reponse profile of regions which are sensitive to the stimuli in the condition
 if cond1 in design_matrix.columns:
     plt.plot(design_matrix[cond1])
@@ -207,6 +236,10 @@ plot_stat_map(clean_map, bg_img=mean_img, threshold=threshold,
               display_mode='ortho', cut_coords=roi, black_bg=True,
               title= contrast_name + ' (fdr=0.05), clusters > 10 voxels', output_file=join(outdir, contrast_name + '_zmap_large_clusters.png'))
 
+plot_glass_brain(clean_map, display_mode='lyrz', black_bg=True, threshold=threshold,
+                 title= contrast_name + ' (fdr=0.05), clusters > 10 voxels',
+                 output_file=join(outdir, contrast_name + '_glass_zmap_large_clusters.png'))
+
 ###############################################################################
 # We can save the effect and zscore maps to the disk
 z_map.to_filename(join(outdir, contrast_name + '_z_map.nii.gz'))
@@ -255,3 +288,7 @@ clean_map, threshold = map_threshold(
 plot_stat_map(clean_map, bg_img=mean_img, threshold=threshold,
               display_mode='ortho', cut_coords=roi, black_bg=True,
               title='Effects of interest (fdr=0.05), clusters > 10 voxels', output_file=join(outdir, contrast_name + '_effects_of_interest_map.png'))
+
+plot_glass_brain(clean_map, display_mode='lyrz', black_bg=True, threshold=threshold,
+                 title='Effects of interest (fdr=0.05), clusters > 10 voxels',
+                 output_file=join(outdir, contrast_name + '_glass_effects_of_interest_map.png'))
